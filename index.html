@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>International Clocks</title>
+    <style>
+        :root {
+            --bg-color: #0a0a0a;
+            --text-color: #e0e0e0;
+            --panel-bg: #111;
+            --orange-status: #ff9900;
+            --green-status: #22ff22;
+            
+            /* Viewport-based font scaling to prevent scrolling and zooming */
+            --font-size: 2.5vw; 
+            --font-size-small: 1.6vw;
+        }
+
+        /* Large screens cap the size so it doesn't get comically large */
+        @media (min-width: 1200px) {
+            :root {
+                --font-size: 28px;
+                --font-size-small: 18px;
+            }
+        }
+
+        /* Portrait Orientation: Request Rotation */
+        @media (max-width: 1024px) and (orientation: portrait) {
+            #rotation-overlay {
+                display: none !important;
+            }
+        }
+
+        /* Added Portrait handling for mobile screens to eliminate scrolling */
+        @media (max-width: 480px) and (orientation: portrait) {
+            :root {
+                --font-size: 2.2vw; 
+                --font-size-small: 1.4vw;
+            }
+            body {
+                padding: 10px !important;
+                justify-content: center;
+            }
+            h1 {
+                font-size: 1.2rem;
+                margin: 0 0 5px 0;
+            }
+            .system-clock-container {
+                padding: 5px 10px !important;
+                margin-bottom: 10px !important;
+                border-width: 2px !important;
+            }
+            .board-container {
+                padding: 10px !important;
+                border-width: 3px !important;
+                width: calc(100% - 20px) !important;
+            }
+            .board {
+                gap: 5px !important;
+            }
+            .header-row, .row {
+                gap: 5px !important;
+            }
+            .header-row {
+                font-size: 7px !important;
+                padding-bottom: 3px !important;
+            }
+        }
+
+        /* Landscape Orientation: Ensure strict full-screen fit */
+        @media (max-height: 600px) and (orientation: landscape) {
+            :root {
+                --font-size: 2vh; 
+                --font-size-small: 1.4vh;
+            }
+            body {
+                padding: 5px !important;
+                justify-content: center;
+            }
+            h1 {
+                font-size: 1rem;
+                margin: 0 0 2px 0;
+            }
+            .system-clock-container {
+                padding: 3px 10px !important;
+                margin-bottom: 5px !important;
+                border-width: 2px !important;
+            }
+            .board-container {
+                padding: 5px 10px !important;
+                border-width: 2px !important;
+            }
+            .board {
+                gap: 2px !important;
+            }
+            .header-row {
+                font-size: 9px !important;
+                padding-bottom: 1px !important;
+            }
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: #ffcc00; 
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            margin: 0;
+            min-height: 100vh;
+            box-sizing: border-box;
+            overflow: hidden; /* Prevent accidental scrolling entirely */
+        }
+
+        h1 { 
+            letter-spacing: 8px; 
+            text-transform: uppercase; 
+            margin: 0 0 10px 0; 
+            text-shadow: 0 0 10px rgba(255,204,0,0.3); 
+            text-align: center; 
+            font-size: 1.8rem;
+        }
+
+        .system-clock-container {
+            display: flex;
+            gap: 3px;
+            align-items: center;
+            background: #1a1a1a;
+            padding: 10px 20px;
+            border: 4px solid #333;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: inset 0 0 15px #000;
+        }
+
+        .controls { 
+            display: none; 
+            visibility: hidden;
+            height: 0;
+            padding: 0;
+            margin: 0;
+        }
+
+        /* The Frame of the Board */
+        .board-container {
+            width: 100%;
+            max-width: 1100px;
+            background: var(--panel-bg);
+            padding: 20px;
+            border: 6px solid #333;
+            border-radius: 4px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.9);
+            box-sizing: border-box;
+        }
+
+        .board {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+        }
+
+        /* CSS rules to separate the 12 rows into 2 visual frames */
+        .frame-static, .frame-dynamic {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .frame-dynamic {
+            border-top: 2px dashed #333;
+            padding-top: 10px;
+            margin-top: 5px;
+        }
+
+        /* Flexbox distribution for uniform gaps and contained layout */
+        .header-row, .row { 
+            display: flex; 
+            gap: 15px; /* Uniform gap between all columns */
+            align-items: center; 
+            width: 100%;
+            justify-content: flex-start; /* Aligns items from the left to match columns perfectly */
+        }
+
+        .header-row {
+            color: #555;
+            font-size: 12px;
+            font-weight: bold;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #222;
+        }
+
+        .header-col {
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+        }
+
+        /* Column widths handled proportionally via flex-grow to ensure uniform gaps */
+        .w-cluster { flex: 1.2; flex-shrink: 0; }
+        .w-time    { flex: 1.5; flex-shrink: 0; }
+        .w-to      { flex: 3.5; flex-shrink: 0; }
+        .w-date    { flex: 1.5; flex-shrink: 0; display: flex; align-items: center; gap: 2px; }
+        .w-status  { flex: 1.5; flex-shrink: 0; display: flex; justify-content: flex-start; }
+
+        /* Align 'DATE' label specifically on top of the date cluster */
+        .header-col.w-date {
+            justify-content: center;
+        }
+
+        /* Align 'WHEN' label specifically on top of the status cluster */
+        .header-col.w-status {
+            justify-content: center;
+        }
+
+        .group {
+            display: flex;
+            gap: 2px;
+            align-items: center;
+        }
+
+        .flap-container {
+            background: #000;
+            border-radius: 4px;
+            padding: 1px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .flap {
+            background: linear-gradient(to bottom, #2a2a2a 0%, #151515 50%, #111111 50%, #1a1a1a 100%);
+            color: var(--text-color);
+            font-size: var(--font-size);
+            font-weight: bold;
+            width: 1.1em;
+            height: 1.4em;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            border-radius: 3px;
+            overflow: hidden;
+            border: 1px solid #050505;
+        }
+
+        /* Pulled suffix in tightly and removed wide gap */
+        .group-dateSuffix {
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .group-dateSuffix .flap {
+            font-size: var(--font-size-small);
+            width: 1.1em;
+            height: 1.3em;
+        }
+
+        .flap::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            background: rgba(0,0,0,0.7);
+            z-index: 2;
+        }
+
+        .separator {
+            font-size: var(--font-size);
+            color: var(--text-color);
+            font-weight: bold;
+            padding: 0 2px;
+        }
+
+        /* Dynamic status colors */
+        .group-status .status-YST .flap { color: var(--orange-status); }
+        .group-status .status-TOD .flap { color: var(--green-status); }
+        .group-status .status-TMR .flap { color: var(--text-color); }
+
+        .flipping {
+            animation: flip 0.06s ease-in-out;
+        }
+
+        @keyframes flip {
+            0% { transform: rotateX(0deg); }
+            50% { transform: rotateX(90deg); background: #000; }
+            100% { transform: rotateX(0deg); }
+        }
+
+        /* Rotation Request Overlay */
+        #rotation-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: var(--bg-color);
+            color: #ffcc00;
+            z-index: 9999;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Courier New', Courier, monospace;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .icon-rotate {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #ffcc00;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            position: relative;
+            animation: rotate-animation 2s infinite ease-in-out;
+        }
+
+        @keyframes rotate-animation {
+            0% { transform: rotate(0deg); }
+            50% { transform: rotate(90deg); }
+            100% { transform: rotate(90deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="rotation-overlay">
+        <div class="icon-rotate"></div>
+        <h2 style="letter-spacing: 4px; text-transform: uppercase;">Landscape Mode Required</h2>
+        <p style="color: #e0e0e0; font-size: 14px;">Please rotate your device to view the split-flap display.</p>
+    </div>
+
+    <h1>World Clock</h1>
+    <div class="system-clock-container" id="clockBoard"></div>
+
+    <div class="controls">
+        <input type="text" id="timeIn">
+        <input type="text" id="toIn">
+        <input type="text" id="airIn">
+        <input type="text" id="checkIn">
+    </div>
+
+    <div class="board-container">
+        <div class="board" id="mainBoard">
+            <div class="header-row">
+                <div class="header-col w-cluster">CLUSTER</div>
+                <div class="header-col w-time">LOCAL TIME</div>
+                <div class="header-col w-to">CITY</div>
+                <div class="header-col w-date">DATE</div>
+                <div class="header-col w-status">WHEN</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CHARS = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:-!/@$%&*()?".split("");
+        const CLOCK_CHARS = "0123456789 ".split("");
+
+        // World Clock Data Configuration
+        const WORLD_CLOCKS = [
+            { city: "AUCKLAND", code: "AKL", timezone: "Pacific/Auckland" },
+            { city: "SYDNEY", code: "SYD", timezone: "Australia/Sydney" },
+            { city: "MELBOURNE", code: "MEL", timezone: "Australia/Melbourne" },
+            { city: "SEATTLE", code: "SEA", timezone: "America/Los_Angeles" },
+            { city: "SINGAPORE", code: "SIN", timezone: "Asia/Singapore" },
+            { city: "TOKYO", code: "NRT", timezone: "Asia/Tokyo" },
+            { city: "PARIS", code: "CDG", timezone: "Europe/Paris" },
+            { city: "LONDON", code: "LHR", timezone: "Europe/London" },
+            { city: "NEW YORK", code: "JFK", timezone: "America/New_York" },
+            { city: "HONG KONG", code: "HKG", timezone: "Asia/Hong_Kong" },
+            { city: "MUMBAI", code: "BOM", timezone: "Asia/Kolkata" },
+            { city: "CHICAGO", code: "ORD", timezone: "America/Chicago" }
+        ];
+
+        // Pool of random international airports for rotating rows.
+        // Duplicates and cities already used above have been filtered out.
+        // Long names truncated to fit standard 12 character limit.
+        const AIRPORT_POOL = [
+            { city: "BUENOS AIRES", code: "EZE", timezone: "America/Argentina/Buenos_Aires" },
+            { city: "DUBAI", code: "DXB", timezone: "Asia/Dubai" },
+            { city: "AMSTERDAM", code: "AMS", timezone: "Europe/Amsterdam" },
+            { city: "FRANKFURT", code: "FRA", timezone: "Europe/Berlin" },
+            { city: "ISTANBUL", code: "IST", timezone: "Europe/Istanbul" },
+            { city: "SEOUL", code: "ICN", timezone: "Asia/Seoul" },
+            { city: "DOHA", code: "DOH", timezone: "Asia/Qatar" },
+            { city: "MADRID", code: "MAD", timezone: "Europe/Madrid" },
+            { city: "ROME", code: "FCO", timezone: "Europe/Rome" },
+            { city: "TORONTO", code: "YYZ", timezone: "America/Toronto" },
+            { city: "DELHI", code: "DEL", timezone: "Asia/Kolkata" },
+            { city: "MUNICH", code: "MUC", timezone: "Europe/Berlin" },
+            { city: "BANGKOK", code: "BKK", timezone: "Asia/Bangkok" },
+            { city: "K LUMPUR", code: "KUL", timezone: "Asia/Kuala_Lumpur" },
+            { city: "CAIRO", code: "CAI", timezone: "Africa/Cairo" },
+            { city: "SAO PAULO", code: "GRU", timezone: "America/Sao_Paulo" },
+            { city: "MEXICO CITY", code: "MEX", timezone: "America/Mexico_City" },
+            { city: "DUBLIN", code: "DUB", timezone: "Europe/Dublin" },
+            { city: "LOS ANGELES", code: "LAX", timezone: "America/Los_Angeles" },
+            { city: "BARCELONA", code: "BCN", timezone: "Europe/Barcelona" },
+            { city: "MILAN", code: "MXP", timezone: "Europe/Milan" },
+            { city: "VIENNA", code: "VIE", timezone: "Europe/Vienna" },
+            { city: "BRUSSELS", code: "BRU", timezone: "Europe/Brussels" },
+            { city: "STOCKHOLM", code: "ARN", timezone: "Europe/Stockholm" },
+            { city: "COPENHAGEN", code: "CPH", timezone: "Europe/Copenhagen" },
+            { city: "ZURICH", code: "ZRH", timezone: "Europe/Zurich" },
+            { city: "LISBON", code: "LIS", timezone: "Europe/Lisbon" },
+            { city: "WARSAW", code: "WAW", timezone: "Europe/Warsaw" },
+            { city: "OSLO", code: "OSL", timezone: "Europe/Oslo" },
+            { city: "ATHENS", code: "ATH", timezone: "Europe/Athens" },
+            { city: "TEL AVIV", code: "TLV", timezone: "Asia/Tel_Aviv" },
+            { city: "RIYADH", code: "RUH", timezone: "Asia/Riyadh" },
+            { city: "TAIPEI", code: "TPE", timezone: "Asia/Taipei" },
+            { city: "SHANGHAI", code: "PVG", timezone: "Asia/Shanghai" },
+            { city: "BEIJING", code: "PEK", timezone: "Asia/Shanghai" },
+            { city: "MANILA", code: "MNL", timezone: "Asia/Manila" },
+            { city: "JAKARTA", code: "CGK", timezone: "Asia/Jakarta" },
+            { city: "HO CHI MINH", code: "SGN", timezone: "Asia/Ho_Chi_Minh" },
+            { city: "MOHAMMED V", code: "CMN", timezone: "Africa/Casablanca" },
+            { city: "JOHANNESBURG", code: "JNB", timezone: "Africa/Johannesburg" },
+            { city: "NAIROBI", code: "NBO", timezone: "Africa/Nairobi" },
+            { city: "SANTIAGO", code: "SCL", timezone: "America/Santiago" },
+            { city: "BOGOTA", code: "BOG", timezone: "America/Bogota" },
+            { city: "LIMA", code: "LIM", timezone: "America/Lima" },
+            { city: "VANCOUVER", code: "YVR", timezone: "America/Vancouver" },
+            { city: "MIAMI", code: "MIA", timezone: "America/New_York" },
+            { city: "SAN FRAN", code: "SFO", timezone: "America/Los_Angeles" },
+            { city: "BOSTON", code: "BOS", timezone: "America/New_York" },
+            { city: "ATLANTA", code: "ATL", timezone: "America/New_York" },
+            { city: "REYKJAVIK", code: "KEF", timezone: "Atlantic/Reykjavik" }
+        ];
+
+        const ROWS_COUNT = WORLD_CLOCKS.length;
+        const COL_CONFIG = [
+            { id: 'code', size: 3 },
+            { id: 'time', size: 4, separatorAt: 2 }, // HH:MM
+            { id: 'to', size: 12 },
+            { id: 'date', size: 2 },
+            { id: 'dateSuffix', size: 2 }, // Column 4 1/2
+            { id: 'status', size: 3 } // YST / TOD / TMR
+        ];
+
+        let boardState = [];
+        let clockState = [" ", " ", " ", " ", " ", " "];
+
+        // Audio initialization on first click
+        function initAudio() {
+            const audio = document.getElementById('ambientAudio');
+            if(audio) {
+                audio.play().catch(e => console.log("Audio play blocked by browser."));
+            }
+            document.removeEventListener('click', initAudio);
+            document.removeEventListener('touchstart', initAudio);
+        }
+
+        document.addEventListener('click', initAudio);
+        document.addEventListener('touchstart', initAudio);
+
+        // System clock updater (Top Bar)
+        function updateClock() {
+            const now = new Date();
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            const timeString = h + m + s;
+            const targetChars = timeString.split("");
+
+            targetChars.forEach((char, i) => {
+                const el = document.getElementById(`clock-flap-${i}`);
+                if (el && clockState[i] !== char) {
+                    const startChar = clockState[i];
+                    animateClockFlap(el, startChar, char, i);
+                }
+            });
+        }
+
+        // Screen Wake Lock handler to prevent system from sleeping
+        let wakeLock = null;
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('Wake Lock active!');
+                }
+            } catch (err) {
+                console.log(`${err.name}, ${err.message}`);
+            }
+        }
+        
+        // Re-request wake lock if window becomes visible again
+        document.addEventListener('visibilitychange', () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                requestWakeLock();
+            }
+        });
+
+        function initClock() {
+            const clockBoard = document.getElementById('clockBoard');
+            for (let i = 0; i < 6; i++) {
+                if (i > 0 && i % 2 === 0) {
+                    const sep = document.createElement('div');
+                    sep.className = 'separator';
+                    sep.innerText = ':';
+                    clockBoard.appendChild(sep);
+                }
+                const container = document.createElement('div');
+                container.className = 'flap-container';
+                const flap = document.createElement('div');
+                flap.className = 'flap';
+                flap.id = `clock-flap-${i}`;
+                flap.innerText = " ";
+                
+                const back = document.createElement('div');
+                back.className = 'flap-back';
+                
+                flap.appendChild(back);
+                container.appendChild(flap);
+                clockBoard.appendChild(container);
+            }
+            setInterval(updateClock, 1000);
+            updateClock();
+        }
+
+        async function animateClockFlap(element, startChar, endChar, idx) {
+            let currentIndex = CLOCK_CHARS.indexOf(startChar);
+            let targetIndex = CLOCK_CHARS.indexOf(endChar);
+            if (targetIndex === -1) targetIndex = 0;
+
+            while (currentIndex !== targetIndex) {
+                currentIndex = (currentIndex + 1) % CLOCK_CHARS.length;
+                element.classList.remove('flipping');
+                void element.offsetWidth; 
+                element.classList.add('flipping');
+
+                await new Promise(r => setTimeout(r, 15));
+                element.childNodes[0].nodeValue = CLOCK_CHARS[currentIndex];
+                await new Promise(r => setTimeout(r, 15)); 
+            }
+            clockState[idx] = endChar;
+        }
+
+        // Helper function to get ordinal suffix for dates
+        function getOrdinalSuffix(day) {
+            if (day >= 11 && day <= 13) {
+                return "TH";
+            }
+            switch (day % 10) {
+                case 1: return "ST";
+                case 2: return "ND";
+                case 3: return "RD";
+                default: return "TH";
+            }
+        }
+
+        // Initialize the split flap board structure
+        function initBoard() {
+            const boardElem = document.getElementById('mainBoard');
+            
+            // Create two distinct frames for split categorization
+            const staticFrame = document.createElement('div');
+            staticFrame.className = 'frame-static';
+            
+            const dynamicFrame = document.createElement('div');
+            dynamicFrame.className = 'frame-dynamic';
+            
+            boardElem.appendChild(staticFrame);
+            boardElem.appendChild(dynamicFrame);
+            
+            for (let r = 0; r < ROWS_COUNT; r++) {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'row';
+                let rowObj = {};
+
+                COL_CONFIG.forEach(col => {
+                    let containerToAppendTo = rowDiv;
+                    
+                    // Specific logic to visually combine DATE and DATE SUFFIX into one column
+                    if (col.id === 'date' || col.id === 'dateSuffix') {
+                        let dateGroup = rowDiv.querySelector('.group-date-composite');
+                        if (!dateGroup) {
+                            dateGroup = document.createElement('div');
+                            dateGroup.className = 'group-date-composite w-date';
+                            rowDiv.appendChild(dateGroup);
+                        }
+                        containerToAppendTo = dateGroup;
+                    }
+
+                    const group = document.createElement('div');
+                    if (col.id !== 'date' && col.id !== 'dateSuffix') {
+                        group.className = `group group-${col.id} w-${col.id}`;
+                    } else {
+                        group.className = `group group-${col.id}`;
+                    }
+                    
+                    // Create a container specifically for applying class names to status
+                    const innerContainer = document.createElement('div');
+                    innerContainer.className = 'group-inner';
+                    innerContainer.style.display = 'flex';
+                    innerContainer.style.gap = '2px';
+                    innerContainer.style.alignItems = 'center';
+                    
+                    for (let i = 0; i < col.size; i++) {
+                        if (col.separatorAt === i) {
+                            const sep = document.createElement('div');
+                            sep.className = 'separator';
+                            sep.innerText = ':';
+                            innerContainer.appendChild(sep);
+                        }
+
+                        const container = document.createElement('div');
+                        container.className = 'flap-container';
+                        const flap = document.createElement('div');
+                        flap.className = 'flap';
+                        flap.id = `r${r}-${col.id}-${i}`;
+                        flap.innerText = " ";
+                        
+                        const back = document.createElement('div');
+                        back.className = 'flap-back';
+                        
+                        flap.appendChild(back);
+                        container.appendChild(flap);
+                        innerContainer.appendChild(container);
+                    }
+                    group.appendChild(innerContainer);
+                    containerToAppendTo.appendChild(group);
+                    rowObj[col.id] = Array(col.size).fill(" ");
+                });
+
+                // Append Rows 1-6 (indexes 0-5) to Static Frame
+                // Append Rows 7-12 (indexes 6-11) to Dynamic Frame
+                if (r < 6) {
+                    staticFrame.appendChild(rowDiv);
+                } else {
+                    dynamicFrame.appendChild(rowDiv);
+                }
+                
+                boardState.push(rowObj);
+            }
+            
+            setInterval(updateWorldClocks, 1000);
+            updateWorldClocks();
+
+            // Set up Row 7 shuffling every 10 seconds
+            setInterval(shiftRowSeven, 10000);
+        }
+
+        // Shift rows 7 down to the bottom and grab a new random city for row 7
+        function shiftRowSeven() {
+            const rowIndexStart = 6; // Row 7 is index 6
+            
+            // Push contents one row down from Row 7 to the end
+            for (let i = WORLD_CLOCKS.length - 1; i > rowIndexStart; i--) {
+                WORLD_CLOCKS[i] = { ...WORLD_CLOCKS[i - 1] };
+            }
+
+            // Pick a random city from the pool that isn't already directly below it
+            let randomAirport;
+            const currentCities = WORLD_CLOCKS.map(c => c.city);
+            const availablePool = AIRPORT_POOL.filter(p => !currentCities.includes(p.city));
+            
+            if (availablePool.length > 0) {
+                randomAirport = availablePool[Math.floor(Math.random() * availablePool.length)];
+            } else {
+                // Fallback to absolute random if the pool is somehow fully exhausted by the grid
+                randomAirport = AIRPORT_POOL[Math.floor(Math.random() * AIRPORT_POOL.length)];
+            }
+
+            WORLD_CLOCKS[rowIndexStart] = randomAirport;
+        }
+
+        // Factual clock updates relative to target timezones
+        function updateWorldClocks() {
+            const now = new Date();
+
+            WORLD_CLOCKS.forEach((clockData, rowIndex) => {
+                const tzTime = new Intl.DateTimeFormat('en-US', {
+                    timeZone: clockData.timezone,
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                }).format(now);
+
+                const tzDayStr = new Intl.DateTimeFormat('en-US', {
+                    timeZone: clockData.timezone,
+                    day: '2-digit'
+                }).format(now);
+
+                const sysDayStr = new Intl.DateTimeFormat('en-US', {
+                    day: 'numeric'
+                }).format(now);
+
+                const tzDay = parseInt(tzDayStr);
+                const sysDay = parseInt(sysDayStr);
+
+                let dayStatus = "TOD";
+                if (tzDay > sysDay || (sysDay > 25 && tzDay === 1)) {
+                    dayStatus = "TMR"; 
+                } else if (tzDay < sysDay || (tzDay > 25 && sysDay === 1)) {
+                    dayStatus = "YST"; 
+                }
+
+                const cleanedTime = tzTime.replace(/:/g, ''); 
+                const dateSuffix = getOrdinalSuffix(tzDay);
+
+                const rowData = {
+                    code: clockData.code,
+                    time: cleanedTime,
+                    to: clockData.city.toUpperCase(),
+                    date: tzDayStr,
+                    dateSuffix: dateSuffix,
+                    status: dayStatus
+                };
+
+                applyRowData(rowIndex, rowData);
+            });
+        }
+
+        function applyRowData(rowIndex, data) {
+            COL_CONFIG.forEach(col => {
+                let text = (data[col.id] || "");
+                if (Array.isArray(text)) {
+                    text = text.join("");
+                }
+                const targetText = text.padEnd(col.size, " ").substring(0, col.size);
+                const targetChars = targetText.split("");
+                
+                // Dynamically append status class to update target color
+                if (col.id === 'status') {
+                    const statusGroup = document.querySelector(`#r${rowIndex}-status-0`)?.closest('.group-inner');
+                    if (statusGroup) {
+                        statusGroup.className = `group-inner status-${targetText.trim()}`;
+                    }
+                }
+
+                targetChars.forEach((char, charIdx) => {
+                    const el = document.getElementById(`r${rowIndex}-${col.id}-${charIdx}`);
+                    if (el) {
+                        const startChar = boardState[rowIndex][col.id][charIdx];
+                        if (startChar !== char) {
+                            boardState[rowIndex][col.id][charIdx] = char;
+                            // Check if this specific column is the time or date column to use number-only flipping
+                            if (col.id === 'time' || col.id === 'date') {
+                                animateClockFlap(el, startChar, char, rowIndex * 100 + charIdx); // Use clock animation for numbers
+                            } else {
+                                animateFlap(el, startChar, char);
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+        async function animateFlap(element, startChar, endChar) {
+            if (startChar === endChar) return;
+
+            let currentIndex = CHARS.indexOf(startChar);
+            let targetIndex = CHARS.indexOf(endChar);
+            if (targetIndex === -1) targetIndex = 0;
+
+            while (currentIndex !== targetIndex) {
+                currentIndex = (currentIndex + 1) % CHARS.length;
+                element.classList.remove('flipping');
+                void element.offsetWidth; 
+                element.classList.add('flipping');
+
+                await new Promise(r => setTimeout(r, 15));
+                element.childNodes[0].nodeValue = CHARS[currentIndex];
+                await new Promise(r => setTimeout(r, 15)); 
+            }
+        }
+
+        requestWakeLock();
+        initClock();
+        initBoard();
+    </script>
+</body>
+</html>
