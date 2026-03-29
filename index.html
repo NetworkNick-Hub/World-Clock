@@ -34,10 +34,6 @@
 
         /* Added Portrait handling for mobile screens to eliminate scrolling */
         @media (max-width: 480px) and (orientation: portrait) {
-            :root {
-                --font-size: 2.2vw; 
-                --font-size-small: 1.4vw;
-            }
             body {
                 padding: 10px !important;
                 justify-content: center;
@@ -65,6 +61,11 @@
             .header-row {
                 font-size: 7px !important;
                 padding-bottom: 3px !important;
+            }
+            
+            /* Task: Remove DATE and WHEN columns on mobile */
+            .w-date, .w-status, .group-date-composite {
+                display: none !important;
             }
         }
 
