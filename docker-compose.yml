@@ -1,0 +1,9 @@
+---
+
+services:
+  world-clock:
+    build: .
+    container_name: world-clock
+    ports:
+      - "8056:80"
+    restart: always
